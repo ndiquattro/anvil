@@ -1,0 +1,28 @@
+reference:
+- title: Get Data
+  desc:  Bring data into R
+- contents:
+  - starts_with("av_get")
+  - av_async_collect
+- title: Explore data
+  desc:  Find where data lives
+- contents:
+  - starts_with("av_ls")
+- title: Modify Remote Tables
+  desc:  Change data on remote sources
+- contents:
+  - av_create_table
+  - av_drop_table
+- title: Connections to Remote Sources
+- contents:
+  - av_connect
+  - make_constring
+- title: Analysis Helpers
+  desc:  Common patterns
+- contents:
+  - av_sample
+  - av_unpack
+- title: Other Helpers
+  desc:  Utilities
+- contents:
+  - show_docs

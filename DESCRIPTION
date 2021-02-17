@@ -1,0 +1,47 @@
+Package: anvil
+Title: Access and Analyze Alloy Attributes
+Version: 0.4.0.9000
+Authors@R: as.person(c(
+    "Nicholas DiQuattro <nicholas@alloy.us> [aut, cre]",
+    "Susanna Supalla <susanna@alloy.us> [ctb]",
+    "Richard Barney <richard.barney@alloy.us> [ctb]",
+    "Clara Fried <clara@alloy.us> [ctb]"
+    ))
+Description: Simplifies and standardizes data access through Athena, S3, and Arrow.
+License: Apache License (>= 2.0)
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.1
+URL: https://github.com/alloy-commons/anvil
+BugReports: https://github.com/alloy-commons/anvil/issues
+Imports: 
+    magrittr,
+    tibble,
+    odbc,
+    dplyr,
+    dbplyr,
+    DBI,
+    stringr,
+    aws.s3,
+    aws.ec2metadata,
+    purrr,
+    lubridate,
+    aws.athena (>= 0.2.0),
+    arrow,
+    rlang,
+    tidyr,
+    xml2
+Suggests: 
+    dittodb (>= 0.1.0),
+    httptest,
+    knitr,
+    rmarkdown,
+    testthat,
+    RSQLite,
+    pkgdown,
+    bit64
+Remotes: 
+    jonkeane/dittodb@main,
+    ndiquattro/aws.athena
+VignetteBuilder: knitr

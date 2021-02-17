@@ -1,0 +1,213 @@
+---
+title: "A Tour of Anvil"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{A Tour of Anvil}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  eval = FALSE,
+  comment = "#>"
+)
+```
+
+## Getting Started
+
+One initial note about function naming convention. All of anvil's functions begin with `av_` to make it easier to find them with autocomplete. The second word also tends to be a grouping verb to help narrow a search. For example there are a number of `av_ls_*` functions that provide lists of objects for exploration or to use programmatically.
+
+That being said, the first function you're likely to interact with is `av_connect()`. This function establishes a connection to Athena and saves the connection object into the `options()` at `anvil.con`. All other anvil functions that need this connection will look there by default. For you, this means you don't have to pass it around again and again.
+
+```{r connect}
+library(anvil)
+
+con <- av_connect("athena")  # You can also save it in the global namespace
+
+# The object contains info that might help with debugging
+str(con)
+```
+
+Now that we are connected we can start pulling data into R!
+
+## Getting Data
+
+There are a number of ways to pull in data using anvil. Let's see how they work.
+
+### Tidyverse
+
+Using functions from [tidyverse packages](https://www.tidyverse.org/) allows for a single workflow that works on in-memory data and remote data through SQL translation. Anvil provides `av_get_table()` which provides the starting point for these workflows.
+
+```{r get_table}
+library(dplyr)
+library(lubridate)
+
+gender_balance_year <-
+  av_get_table("rds-export-graphite", "graphite_person") %>%  # values are quoted correctly automatically
+  mutate(year_born = year(as_date(birth_date))) %>% 
+  group_by(year_born) %>% 
+  summarise(
+    pct_female = mean(as.numeric(gender == "F"), na.rm = TRUE),
+    n = n()
+  ) %>% 
+  arrange(desc(pct_female))
+
+gender_balance_year
+```
+
+You can also see the SQL from these command chains.
+
+```{r show_q}
+gender_balance_year %>% show_query()
+```
+
+Since a lot of time is spent getting tables, there's a shortened alias available to save on typing.
+
+```{r gt}
+av_gt("rds-export-graphite", "graphite_person")
+```
+
+Finally, you can't get a table if you don't know it exists. `av_ls_tables()` lists all the tables on athena.
+
+```{r lstables}
+av_ls_tables()
+```
+
+It can take pattern argument that detects the presence of a substring in the `full_name` column. For example, if you just kinda remember that a table you're looking for has "vote" in the name...
+
+```{r lstables_pattern}
+av_ls_tables("vote")
+```
+
+
+### SQL
+
+If you're more comfortable in SQL or someone else has sent you a SQL query to investigate, you can run straight SQL with `av_get_query()`.
+```{r rsql}
+query <-
+"
+SELECT *
+FROM data.appends
+WHERE first_name_match_flag = 'E'
+"
+
+sqlq <- av_get_query(query)
+
+sqlq
+```
+
+Similar to the tidyverse workflow, `av_get_query()` returns a preview of the results by default. You can either see a larger preview by feeding into `print()`,
+
+```{r pmore}
+sqlq %>% print(n = 20)
+```
+
+running `collect()` after to bring the full results into memory,
+
+```{r savesql}
+sqlq %>% 
+  head() %>%  # Just to keep it light for the docs 
+  collect()
+```
+
+or run it with `collect = TRUE` up front.
+
+```{r autosavesql}
+av_get_query("SELECT * FROM data.appends LIMIT 5", collect = TRUE)
+```
+
+A last note, it's easy to transition from a SQL workflow to tidyverse.
+
+```{r tidysql}
+av_get_query(query) %>% 
+  filter(!is.na(household_id)) %>% 
+  select(ends_with("_flag"), household_id)
+```
+
+### Asynchronously
+
+There may be situations where Athena really needs to churn on a query and you want to do other things. There are a few functions that help run queries asynchronously. To run an async query, just feed your tidyverse workflow or SQL expression into `av_async_collect()`. Regardless of the size/complexity of the query this function will quickly return a query execution id.
+
+```{r async_id}
+qid <-
+  av_gt("data-science", "match_sample") %>% 
+  left_join(
+    av_gt("rds-export-graphite", "graphite_person_address"),
+    by = c("graphite_person_id" = "person_id")
+  ) %>% 
+  count(state, sort = TRUE) %>% 
+  av_async_collect()
+
+qid
+```
+
+While the query runs, you can check-in on it with `av_get_status()`.
+
+```{r async_wait}
+while (av_get_status(qid) == "RUNNING") {
+  cat("Waiting..", sep = "\n")
+  Sys.sleep(1)  # avoid rate limiting
+}
+
+av_get_status(qid)
+```
+
+Now we can recover the results by given the execution ID to `av_get_result()`. This function can either load the result into memory using a csv reader function...
+
+```{r get_result}
+av_get_result(qid, .f = arrow::read_csv_arrow)
+```
+
+Or save a local copy into a provided file.
+
+```{r save_file}
+tfile <- tempfile(fileext = ".csv")
+tfile
+
+av_get_result(qid, tfile)
+
+arrow::read_csv_arrow(tfile)
+```
+
+Any execution ID that comes from a data-science workgroup query should work. If you're looking for some to try, run `av_ls_results()`.
+
+```{r}
+av_ls_results()
+```
+
+## SQL Translation
+
+A more hidden layer of anvil is the custom SQL translations provided in the backend. This allows us to take any R function and redirect the inputs to the corresponding SQL function. Before we get into that though, it's good to know that by default dplyr will pass unrecognized functions through to the sql translation. For example, Athena pastes columns together using `CONCAT()`.
+
+```{r}
+av_get_table('rds-export-graphite', 'graphite_person') %>% 
+  mutate(
+    custom_id = CONCAT(last_name, birth_date)
+  ) %>% 
+  select(custom_id, last_name, birth_date)
+```
+
+The same result can be achieved because of a translation for `paste0()` in the backend.
+
+```{r}
+av_get_table('rds-export-graphite', 'graphite_person') %>% 
+  mutate(
+    custom_id = paste0(last_name, birth_date)
+  ) %>% 
+  select(custom_id, last_name, birth_date)
+```
+
+Here's the translated code.
+
+```{r}
+av_get_table('rds-export-graphite', 'graphite_person') %>% 
+  mutate(
+    custom_id = paste0(last_name, birth_date)
+  ) %>% 
+  select(custom_id, last_name, birth_date) %>% 
+  show_query()
+```
+
+The base set of translations are available in the [dbplyr code base](https://github.com/tidyverse/dbplyr/blob/master/R/backend-.R).
