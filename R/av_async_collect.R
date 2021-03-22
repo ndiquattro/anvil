@@ -4,6 +4,7 @@
 #' execution id for later retrieval of the results using [av_get_result()].
 #'
 #' @param x A tbl or valid SQL character string.
+#' @param workgroup A string indicating the workgroup to use in the request.
 #'
 #' @return A query execution ID
 #'
@@ -27,17 +28,17 @@
 #'
 #' qid <- av_async_collect("SELECT * FROM data.appends LIMIT 50")
 #' av_get_result(qid, .f = read.csv)
-av_async_collect <- function(x) {
+av_async_collect <- function(x, workgroup = "data-science") {
   UseMethod("av_async_collect", x)
 }
 
 #' @export
-av_async_collect.character <- function(x) {
-  aws.athena::start_athena_execution(x, "data-science")$QueryExecutionId
+av_async_collect.character <- function(x, workgroup = "data-science") {
+  aws.athena::start_athena_execution(x, workgroup)$QueryExecutionId
 }
 
 #' @export
-av_async_collect.tbl_sql <- function(x) {
+av_async_collect.tbl_sql <- function(x, workgroup = "data-science") {
   trans <- dbplyr::sql_render(x, x$src$con)
-  aws.athena::start_athena_execution(trans, "data-science")$QueryExecutionId
+  aws.athena::start_athena_execution(trans, workgroup)$QueryExecutionId
 }

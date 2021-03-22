@@ -4,10 +4,12 @@
 \alias{av_async_collect}
 \title{Execute Athena query asynchronously}
 \usage{
-av_async_collect(x)
+av_async_collect(x, workgroup = "data-science")
 }
 \arguments{
 \item{x}{A tbl or valid SQL character string.}
+
+\item{workgroup}{A string indicating the workgroup to use in the request.}
 }
 \value{
 A query execution ID
